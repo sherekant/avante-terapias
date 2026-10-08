@@ -5,12 +5,14 @@ import os
 # 1. Configuración de página y Título
 st.set_page_config(page_title="Fundación Avante", layout="wide")
 
-# Intentar cargar el logo (debes subirlo a GitHub como logo.png)
-if os.path.exists("logo.png"):
+# Intentar cargar el logo de forma más directa
+try:
     st.image("logo.png", width=300)
+except:
+    pass # Si no encuentra el logo aún, no mostrará error, simplemente seguirá.
 
 st.title("Fundación Avante")
-st.subheader("Intervención Especializada en Autismo")
+# Se eliminó el subtítulo a petición
 
 DATA_FILE = 'horarios_avante.csv'
 COLUMNAS = ["Hora", "ID_Paciente", "Nombre_Paciente", "Terapeuta", "Consultorio", "Observacion", "Estado"]
@@ -39,7 +41,6 @@ if menu == "📱 Vista Padres (Buscar)":
     search = st.text_input("Escribe el Número de ID o el Nombre del paciente:", placeholder="Ejemplo: 10234 o Sebastian")
     
     if search:
-        # Busca tanto por número de ID como por nombre
         resultados = df[(df["ID_Paciente"].astype(str).str.contains(search, case=False, na=False)) | 
                         (df["Nombre_Paciente"].astype(str).str.contains(search, case=False, na=False))]
         
@@ -56,12 +57,11 @@ elif menu == "📺 Vista TV (1er Piso)":
     df = load_data()
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-# 5. Administración (Protegida con contraseña y con subida de Excel)
+# 5. Administración (Protegida con contraseña)
 elif menu == "⚙️ Administración":
     
     password = st.sidebar.text_input("Contraseña de acceso:", type="password")
     
-    # La contraseña por defecto es avante123
     if password == "avante123":
         st.success("Candado abierto: Modo Administrador")
         
@@ -86,7 +86,6 @@ elif menu == "⚙️ Administración":
         
         df = load_data()
         
-        # Tabla inteligente que permite agregar y quitar casillas libremente
         df_modificado = st.data_editor(df, num_rows="dynamic", use_container_width=True)
         
         if st.button("Guardar Cambios Manuales"):
