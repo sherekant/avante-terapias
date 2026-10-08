@@ -2,11 +2,21 @@ import streamlit as st
 import pandas as pd
 import os
 
-# 1. Configuración de la Base de Datos Local
+# 1. Configuración de página y Título
+st.set_page_config(page_title="Fundación Avante", layout="wide")
+
+# Intentar cargar el logo (debes subirlo a GitHub como logo.png)
+if os.path.exists("logo.png"):
+    st.image("logo.png", width=300)
+
+st.title("Fundación Avante")
+st.subheader("Intervención Especializada en Autismo")
+
 DATA_FILE = 'horarios_avante.csv'
+COLUMNAS = ["Hora", "ID_Paciente", "Nombre_Paciente", "Terapeuta", "Consultorio", "Observacion", "Estado"]
 
 if not os.path.exists(DATA_FILE):
-    df_init = pd.DataFrame(columns=["Hora", "Paciente", "Terapeuta", "Piso_Sala", "Estado"])
+    df_init = pd.DataFrame(columns=COLUMNAS)
     df_init.to_csv(DATA_FILE, index=False)
 
 def load_data():
@@ -15,80 +25,82 @@ def load_data():
 def save_data(df):
     df.to_csv(DATA_FILE, index=False)
 
-# 2. Configuración de la Aplicación
-st.set_page_config(page_title="Terapias Avante", layout="wide")
-st.title("Centro de Terapias - Instituto Avante")
-
-# Menú de navegación
+# 2. Menú principal
 menu = st.sidebar.radio(
     "Selecciona la vista:", 
-    ["📱 Vista Padres (Buscar Hijo)", "📺 Vista TV (1er Piso)", "⚙️ Administración (Recepción)"]
+    ["📱 Vista Padres (Buscar)", "📺 Vista TV (1er Piso)", "⚙️ Administración"]
 )
 
-# 3. Pantalla para los Padres
-if menu == "📱 Vista Padres (Buscar Hijo)":
-    st.subheader("Encuentra la terapia de tu hijo/a")
+# 3. Vista de Padres (Búsqueda por ID o Nombre)
+if menu == "📱 Vista Padres (Buscar)":
+    st.write("### Encuentra la terapia de tu hijo/a")
     df = load_data()
     
-    search = st.text_input("Escribe el primer nombre de tu hijo/a:", placeholder="Ejemplo: Sebastian")
+    search = st.text_input("Escribe el Número de ID o el Nombre del paciente:", placeholder="Ejemplo: 10234 o Sebastian")
     
     if search:
-        # Filtra la base de datos por el nombre ingresado
-        resultados = df[df["Paciente"].str.contains(search, case=False, na=False)]
+        # Busca tanto por número de ID como por nombre
+        resultados = df[(df["ID_Paciente"].astype(str).str.contains(search, case=False, na=False)) | 
+                        (df["Nombre_Paciente"].astype(str).str.contains(search, case=False, na=False))]
         
         if not resultados.empty:
             st.success("Terapia encontrada:")
-            st.table(resultados)
+            st.dataframe(resultados, use_container_width=True, hide_index=True)
         else:
-            st.warning("No se encontraron terapias asignadas para este nombre el día de hoy.")
+            st.warning("No se encontraron terapias asignadas para este dato.")
 
-# 4. Pantalla para el Televisor del Primer Piso
+# 4. Vista TV (Actualización automática)
 elif menu == "📺 Vista TV (1er Piso)":
-    st.subheader("Horarios Generales de Terapias")
-    
-    # Código oculto para que la pantalla del TV se actualice sola cada 60 segundos
+    st.write("### Horarios Generales de Terapias")
     st.components.v1.html("<meta http-equiv='refresh' content='60'>", height=0)
-    
     df = load_data()
-    # Muestra la tabla en tamaño grande para el TV
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-# 5. Pantalla para la Recepción / Coordinación
-elif menu == "⚙️ Administración (Recepción)":
-    st.subheader("Asignar o Reubicar Terapias")
-    df = load_data()
-
-    # Formulario de ingreso de datos
-    with st.form("nuevo_horario"):
-        col1, col2 = st.columns(2)
-        hora = col1.time_input("Hora de la terapia")
-        paciente = col2.text_input("Nombre del Paciente")
-        terapeuta = col1.text_input("Terapeuta Asignado")
-        sala = col2.selectbox("Piso y Sala", ["Piso 1 - Sala A", "Piso 2 - Sala B", "Piso 2 - Sala C", "Piso 3 - Sala D"])
-        estado = st.selectbox("Estado", ["Confirmado", "Reubicado (Cambio de Sala/Terapeuta)", "Cancelado"])
+# 5. Administración (Protegida con contraseña y con subida de Excel)
+elif menu == "⚙️ Administración":
+    
+    password = st.sidebar.text_input("Contraseña de acceso:", type="password")
+    
+    # La contraseña por defecto es avante123
+    if password == "avante123":
+        st.success("Candado abierto: Modo Administrador")
         
-        submit = st.form_submit_button("Guardar en el sistema")
+        st.write("### 1. Subir Excel del Día")
+        st.info("Tu archivo Excel debe tener estas columnas en la primera fila: Hora, ID_Paciente, Nombre_Paciente, Terapeuta, Consultorio, Observacion, Estado")
+        archivo_subido = st.file_uploader("Sube el archivo Excel o CSV", type=["xlsx", "csv"])
+        
+        if archivo_subido is not None:
+            try:
+                if archivo_subido.name.endswith('.csv'):
+                    df_nuevo = pd.read_csv(archivo_subido)
+                else:
+                    df_nuevo = pd.read_excel(archivo_subido)
+                save_data(df_nuevo)
+                st.success("Base de datos cargada con éxito. Se está proyectando en el TV.")
+            except Exception as e:
+                st.error(f"Error al leer el archivo: {e}")
 
-        if submit and paciente:
-            nueva_fila = pd.DataFrame({
-                "Hora": [hora.strftime("%H:%M")], 
-                "Paciente": [paciente], 
-                "Terapeuta": [terapeuta], 
-                "Piso_Sala": [sala], 
-                "Estado": [estado]
-            })
-            df = pd.concat([df, nueva_fila], ignore_index=True)
-            save_data(df)
-            st.success("Horario guardado y proyectado en el TV correctamente.")
+        st.divider()
+        st.write("### 2. Administrar Terapias (Editar, Agregar o Quitar casillas)")
+        st.write("Haz clic en cualquier celda para editarla. Usa el botón '+' al final para agregar terapias, o selecciona una fila y bórrala con el ícono de papelera.")
+        
+        df = load_data()
+        
+        # Tabla inteligente que permite agregar y quitar casillas libremente
+        df_modificado = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+        
+        if st.button("Guardar Cambios Manuales"):
+            save_data(df_modificado)
+            st.success("¡Cambios guardados y actualizados en el sistema!")
+            
+        st.divider()
+        if st.button("Borrar todos los registros (Cerrar el día)"):
+            df_clean = pd.DataFrame(columns=COLUMNAS)
+            save_data(df_clean)
+            st.success("Sistema limpio para mañana.")
             st.rerun()
-
-    st.divider()
-    st.write("📋 **Terapias registradas hoy:**")
-    st.dataframe(df, use_container_width=True, hide_index=True)
-    
-    # Botón para limpiar al final del día
-    if st.button("Borrar todos los registros (Cerrar el día)"):
-        df_clean = pd.DataFrame(columns=df.columns)
-        save_data(df_clean)
-        st.success("Sistema limpio para el día de mañana.")
-        st.rerun()
+            
+    elif password != "":
+        st.error("Contraseña incorrecta.")
+    else:
+        st.warning("Por favor, introduce la contraseña en el menú lateral izquierdo para gestionar los horarios.")
